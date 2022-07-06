@@ -1,14 +1,11 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
+[RequireComponent(typeof(PlayerInput))]
 public class PlayerController : MonoBehaviour
 {
 
     [Header("Dependencies")]
-    [SerializeField]
-    PhysicMaterial _playerPhysicsMaterial = default;
 
     [Header("Configurations")]
     [SerializeField, Range(0f, 100f)]
@@ -18,10 +15,10 @@ public class PlayerController : MonoBehaviour
     float _maxAcceleration = 5f, _maxAirAcceleration = 1f;
 
     [SerializeField, Range(0f, 100f)]
-    float _manualJumpHeight = 5f;
+    float _jumpHeight = 5f;
 
     [SerializeField, Range(0f, 100f)]
-    float _automaticJumpHeight;
+    float _bounceHeight = 2f;
 
     [SerializeField, Range(0f, 5f)]
     int _maxAirJumps = 0;
@@ -29,9 +26,6 @@ public class PlayerController : MonoBehaviour
     [SerializeField, Range(0f, 90f)]
     float _maxGroundAngle = 60f;
 
-    
-
-    
 
     // Properties
     bool OnGround => _groundContactCount > 0;
@@ -55,7 +49,6 @@ public class PlayerController : MonoBehaviour
 
     // Flags
     private bool _desiresJump = false;
-    private bool _hasBouncedThisFrame = false;
 
     // Collision
     int stepsSinceLastGrounded, stepsSinceLastJumped;
@@ -71,6 +64,10 @@ public class PlayerController : MonoBehaviour
 
     private void Awake()
     {
+        // Cursor
+        Cursor.lockState = CursorLockMode.Locked;
+        Cursor.visible = false;
+
         // Set Rigidbody
         _rb = GetComponent<Rigidbody>();
         _rb.useGravity = false;
@@ -119,11 +116,11 @@ public class PlayerController : MonoBehaviour
         if (_desiresJump)
         {
             _desiresJump = false;
-            Jump(_manualJumpHeight);
+            Jump(_jumpHeight);
         }
-        else if (OnGround)
+        else if (_groundContactCount > 0)
         {
-            //Jump(_automaticJumpHeight);
+            Bounce();
         }
 
         // Add Gravity
@@ -169,9 +166,24 @@ public class PlayerController : MonoBehaviour
         {
             jumpSpeed = Mathf.Max(jumpSpeed - alignedSpeed, 0f);
         }
-
         
         _velocity += jumpDirection * jumpSpeed;
+    }
+
+    private void Bounce()
+    {
+        Vector3 jumpDirection = _contactNormal;
+
+        float bounceSpeed = Mathf.Sqrt(2f * _gravity.magnitude * _bounceHeight);
+
+        float alignedSpeed = Vector3.Dot(_velocity, jumpDirection);
+
+        if (alignedSpeed > 0f)
+        {
+            bounceSpeed = Mathf.Max(bounceSpeed - alignedSpeed, 0f);
+        }
+
+        _velocity += jumpDirection * bounceSpeed;
     }
 
     private void UpdateState()
@@ -198,7 +210,6 @@ public class PlayerController : MonoBehaviour
     {
         _contactNormal = Vector3.zero;
         _groundContactCount = 0;
-        _hasBouncedThisFrame = false;
     }
 
     private void AdjustVelocity()
@@ -208,10 +219,13 @@ public class PlayerController : MonoBehaviour
         float maxSpeedChange = acceleration * Time.deltaTime;
 
         float velocityDotForward = Vector3.Dot(_velocity, transform.forward);
-        float velocityDotRight = Vector3.Dot(_velocity, transform.right);
+        float desiredVelocityDotForward = Vector3.Dot(transform.forward, _desiredForwardVelocity);
 
-        float newForward = Mathf.MoveTowards(velocityDotForward, Vector3.Dot(transform.forward, _desiredForwardVelocity), maxSpeedChange);
-        float newRight = Mathf.MoveTowards(velocityDotRight, Vector3.Dot(transform.right, _desiredRightVelocity), maxSpeedChange);
+        float velocityDotRight = Vector3.Dot(_velocity, transform.right);
+        float desiredVelocityDotRight = Vector3.Dot(transform.right, _desiredRightVelocity);
+
+        float newForward = Mathf.MoveTowards(velocityDotForward, desiredVelocityDotForward, maxSpeedChange);
+        float newRight = Mathf.MoveTowards(velocityDotRight, desiredVelocityDotRight, maxSpeedChange);
 
         Vector3 movement = transform.forward * (newForward - velocityDotForward) + transform.right * (newRight - velocityDotRight);
 
@@ -246,16 +260,7 @@ public class PlayerController : MonoBehaviour
         {
             _contactNormal.Normalize();
         }
-
-        // it's time to
-        // bounce
-        Bounce();
         
-    }
-
-    private void Bounce()
-    {
-        _hasBouncedThisFrame = true;
     }
 
     Vector3 ProjectDirectionOnPlane(Vector3 direction, Vector3 normal)

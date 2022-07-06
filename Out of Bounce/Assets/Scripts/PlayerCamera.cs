@@ -3,7 +3,8 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-public class PlayerCameraScript : MonoBehaviour
+[RequireComponent(typeof(PlayerInput))]
+public class PlayerCamera : MonoBehaviour
 {
     [Header("Dependencies")]
     [SerializeField]
@@ -20,7 +21,7 @@ public class PlayerCameraScript : MonoBehaviour
 
     private Vector2 currentLook = Vector3.forward;
 
-    private void Awake()
+    private void Start()
     {
         _playerInput = GetComponent<PlayerInput>();
         _lookAction = _playerInput.actions["Look"];
