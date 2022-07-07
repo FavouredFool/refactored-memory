@@ -20,15 +20,14 @@ public class PlayerController : MonoBehaviour
     [SerializeField, Range(0f, 100f)]
     float _bounceHeight = 2f;
 
-    [SerializeField, Range(0f, 5f)]
-    int _maxAirJumps = 0;
-
     [SerializeField, Range(0f, 90f)]
     float _maxGroundAngle = 60f;
 
 
     // Properties
     bool OnGround => _groundContactCount > 0;
+
+    Vector3 Gravity => Physics.gravity;
 
     // Inputs
     private PlayerInput _playerInput;
@@ -40,8 +39,7 @@ public class PlayerController : MonoBehaviour
     // Components
     private Rigidbody _rb;
 
-    // Physics Forces
-    private Vector3 _gravity = Physics.gravity;
+    
     
     // Velocity
     private Vector3 _velocity;
@@ -56,9 +54,6 @@ public class PlayerController : MonoBehaviour
     float _minGroundDotProduct;
     Vector3 _contactNormal;
     Vector3 _upAxis = Vector3.up;
-
-    // Jump
-    int _jumpPhase;
 
     
 
@@ -124,7 +119,7 @@ public class PlayerController : MonoBehaviour
         }
 
         // Add Gravity
-        _velocity += _gravity * Time.fixedDeltaTime;
+        _velocity += Gravity * Time.fixedDeltaTime;
 
         // Set Velocity
         _rb.velocity = _velocity;
@@ -142,14 +137,6 @@ public class PlayerController : MonoBehaviour
         {
             jumpDirection = _contactNormal;
         }
-        else if (_maxAirJumps > 0 && _jumpPhase <= _maxAirJumps)
-        {
-            if (_jumpPhase == 0)
-            {
-                _jumpPhase = 1;
-            }
-            jumpDirection = _contactNormal;
-        }
         else
         {
             return;
@@ -157,8 +144,7 @@ public class PlayerController : MonoBehaviour
 
 
         stepsSinceLastJumped = 0;
-        _jumpPhase += 1;
-        float jumpSpeed = Mathf.Sqrt(2f * _gravity.magnitude * jumpHeight);
+        float jumpSpeed = Mathf.Sqrt(2f * Gravity.magnitude * jumpHeight);
 
         float alignedSpeed = Vector3.Dot(_velocity, jumpDirection);
 
@@ -174,7 +160,7 @@ public class PlayerController : MonoBehaviour
     {
         Vector3 jumpDirection = _contactNormal;
 
-        float bounceSpeed = Mathf.Sqrt(2f * _gravity.magnitude * _bounceHeight);
+        float bounceSpeed = Mathf.Sqrt(2f * Gravity.magnitude * _bounceHeight);
 
         float alignedSpeed = Vector3.Dot(_velocity, jumpDirection);
 
@@ -194,10 +180,6 @@ public class PlayerController : MonoBehaviour
         if (OnGround)
         {
             stepsSinceLastGrounded = 0;
-            if (stepsSinceLastJumped > 1)
-            {
-                _jumpPhase = 0;
-            }
         }
         else
         {
@@ -220,14 +202,13 @@ public class PlayerController : MonoBehaviour
 
         float velocityDotForward = Vector3.Dot(_velocity, transform.forward);
         float desiredVelocityDotForward = Vector3.Dot(transform.forward, _desiredForwardVelocity);
+        float calculatedForward = Mathf.MoveTowards(velocityDotForward, desiredVelocityDotForward, maxSpeedChange);
 
         float velocityDotRight = Vector3.Dot(_velocity, transform.right);
         float desiredVelocityDotRight = Vector3.Dot(transform.right, _desiredRightVelocity);
+        float calculatedRight = Mathf.MoveTowards(velocityDotRight, desiredVelocityDotRight, maxSpeedChange);
 
-        float newForward = Mathf.MoveTowards(velocityDotForward, desiredVelocityDotForward, maxSpeedChange);
-        float newRight = Mathf.MoveTowards(velocityDotRight, desiredVelocityDotRight, maxSpeedChange);
-
-        Vector3 movement = transform.forward * (newForward - velocityDotForward) + transform.right * (newRight - velocityDotRight);
+        Vector3 movement = transform.forward * (calculatedForward - velocityDotForward) + transform.right * (calculatedRight - velocityDotRight);
 
         _velocity += movement;
     }
@@ -263,8 +244,23 @@ public class PlayerController : MonoBehaviour
         
     }
 
-    Vector3 ProjectDirectionOnPlane(Vector3 direction, Vector3 normal)
+    public Vector3 GetVelocity()
     {
-        return (direction - normal * Vector3.Dot(direction, normal)).normalized;
+        return _velocity;
+    }
+
+    public Vector3 GetDesiredForwardVelocity()
+    {
+        return _desiredForwardVelocity;
+    }
+
+    public Vector3 GetDesiredRightVelocity()
+    {
+        return _desiredRightVelocity;
+    }
+
+    public float GetAcceleration()
+    {
+        return OnGround ? _maxAcceleration : _maxAirAcceleration;
     }
 }
