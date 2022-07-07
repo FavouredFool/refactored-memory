@@ -33,7 +33,7 @@ public class UIScript : MonoBehaviour
         Vector3 combinedDesiredVelocity = _playerController.GetDesiredForwardVelocity() + _playerController.GetDesiredRightVelocity();
         _desiredVelocityText.text = "DesiredVelocity: " + combinedDesiredVelocity;
 
-        _accelerationText.text = "Acceleration: " + _playerController.GetAcceleration();
+        _accelerationText.text = "Acceleration: " + _playerController.GetCurrentAcceleration();
     }
 
 }

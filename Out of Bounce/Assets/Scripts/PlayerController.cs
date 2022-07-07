@@ -11,8 +11,20 @@ public class PlayerController : MonoBehaviour
     [SerializeField, Range(0f, 100f)]
     float _maxSpeed = 5f;
 
-    [SerializeField, Range(0f, 100f)]
-    float _maxAcceleration = 5f, _maxAirAcceleration = 1f;
+    [SerializeField, Range(0f, 500f)]
+    float _minAcceleration = 1f;
+
+    [SerializeField, Range(0f, 500f)]
+    float _maxAcceleration = 5f;
+
+    [SerializeField, Range(0f, 10f)]
+    float _accelerationGain = 5f;
+
+    [SerializeField, Range(0f, 10f)]
+    float _minAccelerationFalloff = 0.2f;
+
+    [SerializeField, Range(0f, 10f)]
+    float _maxAccelerationFalloff = 2f;
 
     [SerializeField, Range(0f, 100f)]
     float _jumpHeight = 5f;
@@ -45,6 +57,9 @@ public class PlayerController : MonoBehaviour
     private Vector3 _velocity;
     private Vector3 _desiredForwardVelocity, _desiredRightVelocity = Vector3.zero;
 
+    // Acceleration
+    private float _currentAcceleration;
+
     // Flags
     private bool _desiresJump = false;
 
@@ -55,7 +70,6 @@ public class PlayerController : MonoBehaviour
     Vector3 _contactNormal;
     Vector3 _upAxis = Vector3.up;
 
-    
 
     private void Awake()
     {
@@ -77,6 +91,8 @@ public class PlayerController : MonoBehaviour
     private void OnValidate()
     {
         _minGroundDotProduct = Mathf.Cos(_maxGroundAngle * Mathf.Deg2Rad);
+        _maxAcceleration = Mathf.Max(_minAcceleration, _maxAcceleration);
+        _maxAccelerationFalloff = Mathf.Max(_minAccelerationFalloff, _maxAccelerationFalloff);
     }
 
     private void Update()
@@ -196,16 +212,39 @@ public class PlayerController : MonoBehaviour
 
     private void AdjustVelocity()
     {
-        float acceleration = OnGround ? _maxAcceleration : _maxAirAcceleration;
-
-        float maxSpeedChange = acceleration * Time.deltaTime;
-
         float velocityDotForward = Vector3.Dot(_velocity, transform.forward);
-        float desiredVelocityDotForward = Vector3.Dot(transform.forward, _desiredForwardVelocity);
-        float calculatedForward = Mathf.MoveTowards(velocityDotForward, desiredVelocityDotForward, maxSpeedChange);
-
         float velocityDotRight = Vector3.Dot(_velocity, transform.right);
-        float desiredVelocityDotRight = Vector3.Dot(transform.right, _desiredRightVelocity);
+
+        float desiredVelocityDotForward = Vector3.Dot(transform.forward, _desiredForwardVelocity);
+        float desiredVelocityDotRight = Vector3.Dot(transform.right, _desiredRightVelocity);    
+
+
+        // Calculate Acceleration
+
+        float activeDot = Mathf.Abs(velocityDotForward) + Mathf.Abs(velocityDotRight);
+        Debug.Log(activeDot);
+        float deltaVelocityT = Mathf.Clamp01(activeDot / _maxSpeed);
+        float desiredAcceleration = Mathf.Lerp(_minAcceleration, _maxAcceleration, deltaVelocityT);
+
+
+        float maxAccelerationChange;
+
+        if (desiredAcceleration < _currentAcceleration)
+        {
+            maxAccelerationChange = Mathf.Lerp(_maxAccelerationFalloff, _minAccelerationFalloff, deltaVelocityT);
+        }
+        else
+        {
+            maxAccelerationChange = _accelerationGain;
+        }
+
+        _currentAcceleration = Mathf.MoveTowards(_currentAcceleration, desiredAcceleration, maxAccelerationChange);
+
+
+        float maxSpeedChange = _currentAcceleration * Time.deltaTime;
+
+        
+        float calculatedForward = Mathf.MoveTowards(velocityDotForward, desiredVelocityDotForward, maxSpeedChange);
         float calculatedRight = Mathf.MoveTowards(velocityDotRight, desiredVelocityDotRight, maxSpeedChange);
 
         Vector3 movement = transform.forward * (calculatedForward - velocityDotForward) + transform.right * (calculatedRight - velocityDotRight);
@@ -259,8 +298,8 @@ public class PlayerController : MonoBehaviour
         return _desiredRightVelocity;
     }
 
-    public float GetAcceleration()
+    public float GetCurrentAcceleration()
     {
-        return OnGround ? _maxAcceleration : _maxAirAcceleration;
+        return _currentAcceleration;
     }
 }

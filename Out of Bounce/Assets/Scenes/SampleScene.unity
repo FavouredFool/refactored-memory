@@ -661,7 +661,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _playerController: {fileID: 745210767}
-  _mouseSensitivity: 0.3
+  _mouseSensitivity: 0.03
 --- !u!4 &266171614
 Transform:
   m_ObjectHideFlags: 0
@@ -830,7 +830,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0.052}
   m_AnchorMax: {x: 0.897, y: 0.156}
-  m_AnchoredPosition: {x: 5.200012, y: -0.19999695}
+  m_AnchoredPosition: {x: 5.200012, y: -0.19998169}
   m_SizeDelta: {x: -575, y: 1}
   m_Pivot: {x: 0, y: 0}
 --- !u!114 &407541807
@@ -79781,9 +79781,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f208e412633b96b4ba745fa8bcd38566, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _maxSpeed: 73.2
-  _maxAcceleration: 48.7
-  _maxAirAcceleration: 48.3
+  _maxSpeed: 51.1
+  _minAcceleration: 7.7
+  _maxAcceleration: 300
+  _accelerationGain: 1.9
+  _minAccelerationFalloff: 0.2
+  _maxAccelerationFalloff: 10
   _jumpHeight: 5
   _bounceHeight: 2
   _maxGroundAngle: 90
