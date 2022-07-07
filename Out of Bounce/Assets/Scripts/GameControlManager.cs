@@ -23,7 +23,7 @@ public class GameControlManager : MonoBehaviour
     {
         if (_quitAction.WasPressedThisFrame())
         {
-            EditorApplication.isPlaying = false;
+            //EditorApplication.isPlaying = false;
             Application.Quit();
         }
     }

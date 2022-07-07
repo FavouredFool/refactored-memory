@@ -17,15 +17,12 @@ public class PlayerController : MonoBehaviour
     [SerializeField, Range(0f, 500f)]
     float _maxAcceleration = 5f;
 
-    [SerializeField, Range(0f, 10f)]
-    float _accelerationGain = 5f;
-
-    [SerializeField, Range(0f, 10f)]
+    [SerializeField, Range(0f, 50f)]
     float _minAccelerationFalloff = 0.2f;
 
-    [SerializeField, Range(0f, 10f)]
+    [SerializeField, Range(0f, 50f)]
     float _maxAccelerationFalloff = 2f;
-
+    
     [SerializeField, Range(0f, 100f)]
     float _jumpHeight = 5f;
 
@@ -34,6 +31,10 @@ public class PlayerController : MonoBehaviour
 
     [SerializeField, Range(0f, 90f)]
     float _maxGroundAngle = 60f;
+
+    [Header("AnimationCurve")]
+    [SerializeField]
+    AnimationCurve _accelerationCurve;
 
 
     // Properties
@@ -222,9 +223,10 @@ public class PlayerController : MonoBehaviour
         // Calculate Acceleration
 
         float activeDot = Mathf.Abs(velocityDotForward) + Mathf.Abs(velocityDotRight);
-        Debug.Log(activeDot);
+
         float deltaVelocityT = Mathf.Clamp01(activeDot / _maxSpeed);
-        float desiredAcceleration = Mathf.Lerp(_minAcceleration, _maxAcceleration, deltaVelocityT);
+        Debug.Log(_accelerationCurve.Evaluate(deltaVelocityT));
+        float desiredAcceleration = Mathf.Lerp(_minAcceleration, _maxAcceleration, _accelerationCurve.Evaluate(deltaVelocityT));
 
 
         float maxAccelerationChange;
@@ -235,7 +237,7 @@ public class PlayerController : MonoBehaviour
         }
         else
         {
-            maxAccelerationChange = _accelerationGain;
+            maxAccelerationChange = float.PositiveInfinity;
         }
 
         _currentAcceleration = Mathf.MoveTowards(_currentAcceleration, desiredAcceleration, maxAccelerationChange);

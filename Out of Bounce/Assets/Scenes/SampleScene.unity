@@ -79781,11 +79781,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f208e412633b96b4ba745fa8bcd38566, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _maxSpeed: 51.1
-  _minAcceleration: 7.7
+  _maxSpeed: 30
+  _minAcceleration: 50
   _maxAcceleration: 300
-  _accelerationGain: 1.9
-  _minAccelerationFalloff: 0.2
+  _accelerationGain: 2.5
+  _minAccelerationFalloff: 0
   _maxAccelerationFalloff: 10
   _jumpHeight: 5
   _bounceHeight: 2
