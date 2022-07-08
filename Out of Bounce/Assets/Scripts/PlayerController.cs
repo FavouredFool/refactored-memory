@@ -26,11 +26,17 @@ public class PlayerController : MonoBehaviour
     [SerializeField, Range(0f, 100f)]
     float _jumpHeight = 5f;
 
+    [SerializeField, Range(0f, 1000f)]
+    float _jumpWindowInMS = 500f;
+
     [SerializeField, Range(0f, 100f)]
     float _bounceHeight = 2f;
 
     [SerializeField, Range(0f, 90f)]
     float _maxGroundAngle = 60f;
+
+    [SerializeField, Range(0f, 10f)]
+    float _gravityScale = 3f;
 
     [Header("AnimationCurve")]
     [SerializeField]
@@ -61,8 +67,8 @@ public class PlayerController : MonoBehaviour
     // Acceleration
     private float _currentAcceleration;
 
-    // Flags
-    private bool _desiresJump = false;
+    // Time
+    private float _desiresJumpStartTimeInMS = float.NegativeInfinity;
 
     // Collision
     int stepsSinceLastGrounded, stepsSinceLastJumped;
@@ -102,7 +108,7 @@ public class PlayerController : MonoBehaviour
 
         if (_jumpAction.WasPressedThisFrame())
         {
-            _desiresJump = true;
+            _desiresJumpStartTimeInMS = Time.time * 1000;
         }
         
 
@@ -123,20 +129,27 @@ public class PlayerController : MonoBehaviour
         _velocity = _rb.velocity;
 
         UpdateState();
-        AdjustVelocity();
+        AdjustVelocityAndAcceleration();
 
-        if (_desiresJump)
+        if (OnGround)
         {
-            _desiresJump = false;
-            Jump(_jumpHeight);
+            // Jump or bounce
+
+            if (Time.time * 1000 - _desiresJumpStartTimeInMS < _jumpWindowInMS)
+            {
+                Jump(_jumpHeight);
+            }
+            else
+            {
+                BounceOffGround();
+            }
+
         }
-        else if (_groundContactCount > 0)
-        {
-            Bounce();
-        }
+
+        
 
         // Add Gravity
-        _velocity += Gravity * Time.fixedDeltaTime;
+        _velocity += Gravity * _gravityScale * Time.fixedDeltaTime;
 
         // Set Velocity
         _rb.velocity = _velocity;
@@ -148,17 +161,10 @@ public class PlayerController : MonoBehaviour
 
     private void Jump(float jumpHeight)
     {
-        Vector3 jumpDirection;
+        // Reset Jump Timer
+        _desiresJumpStartTimeInMS = float.NegativeInfinity;
 
-        if (OnGround)
-        {
-            jumpDirection = _contactNormal;
-        }
-        else
-        {
-            return;
-        }
-
+        Vector3 jumpDirection = _contactNormal;
 
         stepsSinceLastJumped = 0;
         float jumpSpeed = Mathf.Sqrt(2f * Gravity.magnitude * jumpHeight);
@@ -173,7 +179,7 @@ public class PlayerController : MonoBehaviour
         _velocity += jumpDirection * jumpSpeed;
     }
 
-    private void Bounce()
+    private void BounceOffGround()
     {
         Vector3 jumpDirection = _contactNormal;
 
@@ -211,26 +217,23 @@ public class PlayerController : MonoBehaviour
         _groundContactCount = 0;
     }
 
-    private void AdjustVelocity()
+    private void AdjustVelocityAndAcceleration()
     {
+        // Calculate velocity DotProducts
         float velocityDotForward = Vector3.Dot(_velocity, transform.forward);
         float velocityDotRight = Vector3.Dot(_velocity, transform.right);
 
-        float desiredVelocityDotForward = Vector3.Dot(transform.forward, _desiredForwardVelocity);
-        float desiredVelocityDotRight = Vector3.Dot(transform.right, _desiredRightVelocity);    
+        AdjustAcceleration(velocityDotForward, velocityDotRight);
+        AdjustVelocity(velocityDotForward, velocityDotRight);
+    }
 
-
-        // Calculate Acceleration
-
+    private void AdjustAcceleration(float velocityDotForward, float velocityDotRight)
+    {
         float activeDot = Mathf.Abs(velocityDotForward) + Mathf.Abs(velocityDotRight);
-
         float deltaVelocityT = Mathf.Clamp01(activeDot / _maxSpeed);
-        Debug.Log(_accelerationCurve.Evaluate(deltaVelocityT));
         float desiredAcceleration = Mathf.Lerp(_minAcceleration, _maxAcceleration, _accelerationCurve.Evaluate(deltaVelocityT));
 
-
         float maxAccelerationChange;
-
         if (desiredAcceleration < _currentAcceleration)
         {
             maxAccelerationChange = Mathf.Lerp(_maxAccelerationFalloff, _minAccelerationFalloff, deltaVelocityT);
@@ -241,11 +244,15 @@ public class PlayerController : MonoBehaviour
         }
 
         _currentAcceleration = Mathf.MoveTowards(_currentAcceleration, desiredAcceleration, maxAccelerationChange);
+    }
 
+    private void AdjustVelocity(float velocityDotForward, float velocityDotRight)
+    {
+        float desiredVelocityDotForward = Vector3.Dot(transform.forward, _desiredForwardVelocity);
+        float desiredVelocityDotRight = Vector3.Dot(transform.right, _desiredRightVelocity);
 
         float maxSpeedChange = _currentAcceleration * Time.deltaTime;
 
-        
         float calculatedForward = Mathf.MoveTowards(velocityDotForward, desiredVelocityDotForward, maxSpeedChange);
         float calculatedRight = Mathf.MoveTowards(velocityDotRight, desiredVelocityDotRight, maxSpeedChange);
 
@@ -253,6 +260,8 @@ public class PlayerController : MonoBehaviour
 
         _velocity += movement;
     }
+
+
 
     private void OnCollisionEnter(Collision collision)
     {

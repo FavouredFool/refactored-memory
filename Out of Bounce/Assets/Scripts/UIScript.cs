@@ -20,6 +20,9 @@ public class UIScript : MonoBehaviour
     [SerializeField]
     private TMP_Text _accelerationText;
 
+    [SerializeField]
+    private TMP_Text _verticalVelocityText;
+
 
     private void Update()
     {
