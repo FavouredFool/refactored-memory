@@ -22,6 +22,9 @@ public class PlayerController : MonoBehaviour
 
     [SerializeField, Range(0f, 50f)]
     float _maxAccelerationFalloff = 2f;
+
+    [SerializeField, Range(0f, 50f)]
+    float _bounceAccelerationFalloff = 2f;
     
     [SerializeField, Range(0f, 100f)]
     float _jumpHeight = 5f;
@@ -33,7 +36,7 @@ public class PlayerController : MonoBehaviour
     float _bounceHeight = 2f;
 
     [SerializeField, Range(0f, 90f)]
-    float _maxGroundAngle = 60f;
+    float _maxGroundAngle = 60f, _maxWallAngle = 90f;
 
     [SerializeField, Range(0f, 10f)]
     float _gravityScale = 3f;
@@ -45,6 +48,7 @@ public class PlayerController : MonoBehaviour
 
     // Properties
     bool OnGround => _groundContactCount > 0;
+    bool OnWall => _wallContactCount > 0;
 
     Vector3 Gravity => Physics.gravity;
 
@@ -58,11 +62,13 @@ public class PlayerController : MonoBehaviour
     // Components
     private Rigidbody _rb;
 
-    
-    
     // Velocity
-    private Vector3 _velocity;
+    private Vector3 _movementVelocity;
+    private Vector3 _bounceVelocity;
     private Vector3 _desiredForwardVelocity, _desiredRightVelocity = Vector3.zero;
+    private Vector3 _velocityLastStep;
+
+    private float _bounceVelocityPercentage = 0f;
 
     // Acceleration
     private float _currentAcceleration;
@@ -71,12 +77,14 @@ public class PlayerController : MonoBehaviour
     private float _desiresJumpStartTimeInMS = float.NegativeInfinity;
 
     // Collision
-    int stepsSinceLastGrounded, stepsSinceLastJumped;
-    int _groundContactCount;
-    float _minGroundDotProduct;
-    Vector3 _contactNormal;
+    int _groundContactCount,_wallContactCount;
+    float _minGroundDotProduct, _minWallDotProduct;
+    Vector3 _groundContactNormal, _wallContactNormal;
     Vector3 _upAxis = Vector3.up;
 
+    // Bounce
+    private int _stepsSinceLastGroundBounce = 0;
+    private int _stepsSinceLastWallBounce = 0;
 
     private void Awake()
     {
@@ -98,6 +106,7 @@ public class PlayerController : MonoBehaviour
     private void OnValidate()
     {
         _minGroundDotProduct = Mathf.Cos(_maxGroundAngle * Mathf.Deg2Rad);
+        _minWallDotProduct = Mathf.Cos(_maxWallAngle * Mathf.Deg2Rad);
         _maxAcceleration = Mathf.Max(_minAcceleration, _maxAcceleration);
         _maxAccelerationFalloff = Mathf.Max(_minAccelerationFalloff, _maxAccelerationFalloff);
     }
@@ -109,6 +118,7 @@ public class PlayerController : MonoBehaviour
         if (_jumpAction.WasPressedThisFrame())
         {
             _desiresJumpStartTimeInMS = Time.time * 1000;
+            
         }
         
 
@@ -126,15 +136,16 @@ public class PlayerController : MonoBehaviour
     private void FixedUpdate()
     {
         // Get Velocity
-        _velocity = _rb.velocity;
+        _bounceVelocity = _rb.velocity;
+        _movementVelocity = _rb.velocity;
 
         UpdateState();
-        AdjustVelocityAndAcceleration();
+        AdjustMovementVelocityAndAcceleration();
+        AdjustBounceVelocityPercentage();
 
         if (OnGround)
         {
             // Jump or bounce
-
             if (Time.time * 1000 - _desiresJumpStartTimeInMS < _jumpWindowInMS)
             {
                 Jump(_jumpHeight);
@@ -143,85 +154,138 @@ public class PlayerController : MonoBehaviour
             {
                 BounceOffGround();
             }
-
+        }
+        else if (OnWall)
+        {
+            BounceOffWall();
         }
 
         
 
         // Add Gravity
-        _velocity += Gravity * _gravityScale * Time.fixedDeltaTime;
+        _movementVelocity += Gravity * _gravityScale * Time.fixedDeltaTime;
 
         // Set Velocity
-        _rb.velocity = _velocity;
+        _rb.velocity = _bounceVelocity * _bounceVelocityPercentage + _movementVelocity * (1 - _bounceVelocityPercentage);
 
         // ClearState
         ClearState();
-        
+
+        _velocityLastStep = _movementVelocity;
+
     }
 
     private void Jump(float jumpHeight)
     {
+        if (_stepsSinceLastGroundBounce <= 1)
+        {
+            return;
+        }
+
         // Reset Jump Timer
         _desiresJumpStartTimeInMS = float.NegativeInfinity;
 
-        Vector3 jumpDirection = _contactNormal;
+        Vector3 jumpDirection = _groundContactNormal;
 
-        stepsSinceLastJumped = 0;
         float jumpSpeed = Mathf.Sqrt(2f * Gravity.magnitude * jumpHeight);
+        float alignedSpeed = Vector3.Dot(_movementVelocity, jumpDirection);
 
-        float alignedSpeed = Vector3.Dot(_velocity, jumpDirection);
 
         if (alignedSpeed > 0f)
         {
             jumpSpeed = Mathf.Max(jumpSpeed - alignedSpeed, 0f);
         }
         
-        _velocity += jumpDirection * jumpSpeed;
+        _movementVelocity += jumpDirection * jumpSpeed;
+
+        _stepsSinceLastGroundBounce = 0;
     }
 
     private void BounceOffGround()
     {
-        Vector3 jumpDirection = _contactNormal;
+        if (_stepsSinceLastGroundBounce <= 1)
+        {
+            return;
+        }
 
+        Vector3 jumpDirection = _groundContactNormal;
         float bounceSpeed = Mathf.Sqrt(2f * Gravity.magnitude * _bounceHeight);
-
-        float alignedSpeed = Vector3.Dot(_velocity, jumpDirection);
-
+        float alignedSpeed = Vector3.Dot(_movementVelocity, jumpDirection);
+        
         if (alignedSpeed > 0f)
         {
             bounceSpeed = Mathf.Max(bounceSpeed - alignedSpeed, 0f);
         }
 
-        _velocity += jumpDirection * bounceSpeed;
+        _movementVelocity += jumpDirection * bounceSpeed;
+
+        _stepsSinceLastGroundBounce = 0;
+    }
+
+    private void BounceOffWall()
+    {
+        if (_stepsSinceLastWallBounce <= 1)
+        {
+            return;
+        }
+
+        Vector3 wallNormal = _wallContactNormal;
+
+        Vector3 reflectVelocity = Vector3.Reflect(_velocityLastStep, wallNormal);
+
+        float bounceSpeed = Mathf.Sqrt(2f * Gravity.magnitude * reflectVelocity.magnitude);
+
+        _bounceVelocity += reflectVelocity.normalized * bounceSpeed;
+
+        _bounceVelocityPercentage = 1.0f;
+
+        _stepsSinceLastWallBounce = 0;
     }
 
     private void UpdateState()
     {
-        stepsSinceLastGrounded += 1;
-        stepsSinceLastJumped += 1;
+        _stepsSinceLastGroundBounce += 1;
+        _stepsSinceLastWallBounce += 1;
 
-        if (OnGround)
+        if (!OnGround)
         {
-            stepsSinceLastGrounded = 0;
+            _groundContactNormal = _upAxis;
         }
-        else
+
+        if (!OnWall)
         {
-            _contactNormal = _upAxis;
-        }
+            _wallContactNormal = _upAxis;
+        } 
+
     }
 
 
     private void ClearState()
     {
-        _contactNormal = Vector3.zero;
-        _groundContactCount = 0;
+        _groundContactNormal = _wallContactNormal = Vector3.zero;
+        _groundContactCount = _wallContactCount = 0;
+
+    }
+    
+    private void AdjustBounceVelocityPercentage()
+    {
+        if (_bounceVelocityPercentage > 0f)
+        {
+            _bounceVelocityPercentage = Mathf.MoveTowards(_bounceVelocityPercentage, 0f, _bounceAccelerationFalloff);
+        }
+        else
+        {
+            _bounceVelocity = Vector3.zero;
+        }
+        
+        
     }
 
-    private void AdjustVelocityAndAcceleration()
+    private void AdjustMovementVelocityAndAcceleration()
     {
         // Calculate velocity DotProducts
-        float velocityDotForward = Vector3.Dot(_velocity, transform.forward);
-        float velocityDotRight = Vector3.Dot(_velocity, transform.right);
+        float velocityDotForward = Vector3.Dot(_movementVelocity, transform.forward);
+        float velocityDotRight = Vector3.Dot(_movementVelocity, transform.right);
 
         AdjustAcceleration(velocityDotForward, velocityDotRight);
         AdjustVelocity(velocityDotForward, velocityDotRight);
@@ -258,7 +322,7 @@ public class PlayerController : MonoBehaviour
 
         Vector3 movement = transform.forward * (calculatedForward - velocityDotForward) + transform.right * (calculatedRight - velocityDotRight);
 
-        _velocity += movement;
+        _movementVelocity += movement;
     }
 
 
@@ -283,20 +347,25 @@ public class PlayerController : MonoBehaviour
             if (upDot >= _minGroundDotProduct)
             {
                 _groundContactCount += 1;
-                _contactNormal += normal;
-            }            
+                _groundContactNormal += normal;
+            }
+            else
+            {
+                if (upDot > -0.01f)
+                {
+                    _wallContactCount += 1;
+                    _wallContactNormal += normal;
+                }
+            }      
         }
 
-        if (collision.contactCount > 1)
-        {
-            _contactNormal.Normalize();
-        }
-        
+        _groundContactNormal.Normalize();
+        _wallContactNormal.Normalize();
     }
 
     public Vector3 GetVelocity()
     {
-        return _velocity;
+        return _movementVelocity;
     }
 
     public Vector3 GetDesiredForwardVelocity()

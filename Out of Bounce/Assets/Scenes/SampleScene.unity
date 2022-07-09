@@ -79787,10 +79787,12 @@ MonoBehaviour:
   _maxAcceleration: 125
   _minAccelerationFalloff: 0
   _maxAccelerationFalloff: 7.5
+  _bounceAccelerationFalloff: 0.03
   _jumpHeight: 15
   _jumpWindowInMS: 300
   _bounceHeight: 5
-  _maxGroundAngle: 90
+  _maxGroundAngle: 5
+  _maxWallAngle: 0
   _gravityScale: 1.75
   _accelerationCurve:
     serializedVersion: 2
