@@ -63,12 +63,13 @@ public class PlayerController : MonoBehaviour
     private Rigidbody _rb;
 
     // Velocity
-    private Vector3 _movementVelocity;
+    private Vector3 _totalVelocity;
+    private Vector3 _horizontalMovementVelocity;
+    private Vector3 _verticalVelocity;
+    private Vector3 _enviornmentVelocity;
     private Vector3 _bounceVelocity;
     private Vector3 _desiredForwardVelocity, _desiredRightVelocity = Vector3.zero;
-    private Vector3 _velocityLastStep;
-
-    private float _bounceVelocityPercentage = 0f;
+    private Vector3 _totalVelocityLastStep;
 
     // Acceleration
     private float _currentAcceleration;
@@ -136,12 +137,66 @@ public class PlayerController : MonoBehaviour
     private void FixedUpdate()
     {
         // Get Velocity
-        _bounceVelocity = _rb.velocity;
-        _movementVelocity = _rb.velocity;
+        //_enviornmentVelocity = _rb.velocity;
+
+        // Should _movementVelocity get the full velocity even though it didn't earn it?
+        //_movementVelocity = _rb.velocity;
+
+        /*
+        if (new Vector3(_rb.velocity.x, 0, _rb.velocity.z).sqrMagnitude >= _movementVelocity.sqrMagnitude)
+        {
+            _movementVelocity = _movementVelocity;
+        }
+        else
+        {
+            _movementVelocity = Vector3.zero;
+        }
+        */
+
+        // Rest ist environment-velocity
+
+        // Totalvelocity ist Rigidbody velocity
+        _totalVelocity = _rb.velocity;
+
+        float totalX = _totalVelocity.x;
+        float totalY = _totalVelocity.y;
+        float totalZ = _totalVelocity.z;
+
+        float yPercent = 1;
+        float xPercent = 1;
+        float zPercent = 1;
+
+
+
+        if (totalY != 0)
+        {
+            yPercent = _enviornmentVelocity.y / totalY;
+        }
+        if (totalX != 0)
+        {
+            xPercent = _enviornmentVelocity.x / totalX;
+        }
+        if (totalZ != 0)
+        {
+            zPercent = _enviornmentVelocity.z / totalZ;
+        }
+
+        _enviornmentVelocity = new Vector3(totalX * xPercent, totalY * yPercent, totalZ * zPercent);
+
+        _verticalVelocity = new Vector3(0f, totalY * (1 - yPercent), 0f);
+
+        float horizontalX = totalX * (1 - xPercent);
+        float horizontalZ = totalZ * (1 - zPercent);
+
+        _horizontalMovementVelocity = new Vector3(horizontalX, 0f, horizontalZ);
+
+        
+
+
 
         UpdateState();
         AdjustMovementVelocityAndAcceleration();
-        AdjustBounceVelocityPercentage();
+        
 
         if (OnGround)
         {
@@ -160,19 +215,27 @@ public class PlayerController : MonoBehaviour
             BounceOffWall();
         }
 
-        
+        AdjustEnvironmentVelocity();
+
 
         // Add Gravity
-        _movementVelocity += Gravity * _gravityScale * Time.fixedDeltaTime;
+        _verticalVelocity += Gravity * _gravityScale * Time.fixedDeltaTime;
+
+        /*
+        Debug.Log($"Environment: {_enviornmentVelocity}");
+        Debug.Log($"Horizontal: {_horizontalMovementVelocity}");
+        Debug.Log($"Vertical: {_verticalVelocity}");
+        */
+
+        Vector3 totalVelocity = _enviornmentVelocity + _horizontalMovementVelocity + _verticalVelocity;
 
         // Set Velocity
-        _rb.velocity = _bounceVelocity * _bounceVelocityPercentage + _movementVelocity * (1 - _bounceVelocityPercentage);
+        _rb.velocity = totalVelocity;
+
+        _totalVelocityLastStep = totalVelocity;
 
         // ClearState
         ClearState();
-
-        _velocityLastStep = _movementVelocity;
-
     }
 
     private void Jump(float jumpHeight)
@@ -188,7 +251,7 @@ public class PlayerController : MonoBehaviour
         Vector3 jumpDirection = _groundContactNormal;
 
         float jumpSpeed = Mathf.Sqrt(2f * Gravity.magnitude * jumpHeight);
-        float alignedSpeed = Vector3.Dot(_movementVelocity, jumpDirection);
+        float alignedSpeed = Vector3.Dot(_horizontalMovementVelocity, jumpDirection);
 
 
         if (alignedSpeed > 0f)
@@ -196,7 +259,7 @@ public class PlayerController : MonoBehaviour
             jumpSpeed = Mathf.Max(jumpSpeed - alignedSpeed, 0f);
         }
         
-        _movementVelocity += jumpDirection * jumpSpeed;
+        _horizontalMovementVelocity += jumpDirection * jumpSpeed;
 
         _stepsSinceLastGroundBounce = 0;
     }
@@ -210,17 +273,21 @@ public class PlayerController : MonoBehaviour
 
         Vector3 jumpDirection = _groundContactNormal;
         float bounceSpeed = Mathf.Sqrt(2f * Gravity.magnitude * _bounceHeight);
-        float alignedSpeed = Vector3.Dot(_movementVelocity, jumpDirection);
+        
+        
+        float alignedSpeed = Vector3.Dot(_totalVelocity, jumpDirection);
         
         if (alignedSpeed > 0f)
         {
             bounceSpeed = Mathf.Max(bounceSpeed - alignedSpeed, 0f);
         }
+        
 
-        _movementVelocity += jumpDirection * bounceSpeed;
+        _verticalVelocity += jumpDirection * bounceSpeed;
 
         _stepsSinceLastGroundBounce = 0;
     }
+
 
     private void BounceOffWall()
     {
@@ -231,13 +298,11 @@ public class PlayerController : MonoBehaviour
 
         Vector3 wallNormal = _wallContactNormal;
 
-        Vector3 reflectVelocity = Vector3.Reflect(_velocityLastStep, wallNormal);
+        Vector3 reflectVelocity = Vector3.Reflect(_totalVelocityLastStep, wallNormal);
 
-        float bounceSpeed = Mathf.Sqrt(2f * Gravity.magnitude * reflectVelocity.magnitude);
+        //float bounceSpeed = Mathf.Sqrt(2f * Gravity.magnitude * _totalVelocityLastStep.magnitude);
 
-        _bounceVelocity += reflectVelocity.normalized * bounceSpeed;
-
-        _bounceVelocityPercentage = 1.0f;
+        _bounceVelocity += reflectVelocity.normalized * _totalVelocityLastStep.magnitude;
 
         _stepsSinceLastWallBounce = 0;
     }
@@ -267,25 +332,21 @@ public class PlayerController : MonoBehaviour
 
     }
     
-    private void AdjustBounceVelocityPercentage()
+    private void AdjustEnvironmentVelocity()
     {
-        if (_bounceVelocityPercentage > 0f)
-        {
-            _bounceVelocityPercentage = Mathf.MoveTowards(_bounceVelocityPercentage, 0f, _bounceAccelerationFalloff);
-        }
-        else
-        {
-            _bounceVelocity = Vector3.zero;
-        }
-        
-        
+
+        _bounceVelocity = Vector3.MoveTowards(_bounceVelocity, Vector3.zero, _bounceAccelerationFalloff);
+
+
+        // Here i'd add additional EnviornmentVelocitys - if i haaaaad any :cccc
+        _enviornmentVelocity = _bounceVelocity;
     }
 
     private void AdjustMovementVelocityAndAcceleration()
     {
         // Calculate velocity DotProducts
-        float velocityDotForward = Vector3.Dot(_movementVelocity, transform.forward);
-        float velocityDotRight = Vector3.Dot(_movementVelocity, transform.right);
+        float velocityDotForward = Vector3.Dot(_horizontalMovementVelocity, transform.forward);
+        float velocityDotRight = Vector3.Dot(_horizontalMovementVelocity, transform.right);
 
         AdjustAcceleration(velocityDotForward, velocityDotRight);
         AdjustVelocity(velocityDotForward, velocityDotRight);
@@ -322,7 +383,7 @@ public class PlayerController : MonoBehaviour
 
         Vector3 movement = transform.forward * (calculatedForward - velocityDotForward) + transform.right * (calculatedRight - velocityDotRight);
 
-        _movementVelocity += movement;
+        _horizontalMovementVelocity += movement;
     }
 
 
@@ -365,7 +426,7 @@ public class PlayerController : MonoBehaviour
 
     public Vector3 GetVelocity()
     {
-        return _movementVelocity;
+        return _horizontalMovementVelocity;
     }
 
     public Vector3 GetDesiredForwardVelocity()
